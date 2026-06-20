@@ -1,0 +1,1162 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Tachyon — a faster-than-light particle, taught on a chalkboard</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Caveat:wght@500;600;700&family=Patrick+Hand&family=Space+Mono:ital,wght@0,400;0,700;1,400&display=swap" rel="stylesheet">
+<style>
+:root {
+  --board: #1c2a21;
+  --board-2: #18241c;
+  --board-edge: #0f1813;
+  --chalk: #eef1e4;
+  --chalk-dim: #b9c2b0;
+  --chalk-faint: #7c8a78;
+  --yellow: #eccf7a;
+  --yellow-dim: rgba(236,207,122,0.16);
+  --pink: #e2a3ab;
+  --blue: #9bc4d2;
+  --amber: #e8a23d;
+  --paper: #efe9d6;
+  --paper-line: #c9a98f;
+  --tape: rgba(236,207,122,0.55);
+  --hand: 'Patrick Hand', cursive;
+  --script: 'Caveat', cursive;
+  --mono: 'Space Mono', 'IBM Plex Mono', monospace;
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+html { scroll-behavior: smooth; }
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+  * { animation-duration: 0.001ms !important; animation-iteration-count: 1 !important; transition-duration: 0.001ms !important; scroll-behavior: auto !important; }
+}
+
+body {
+  background: var(--board-edge);
+  color: var(--chalk);
+  font-family: var(--hand);
+  -webkit-font-smoothing: antialiased;
+  overflow-x: hidden;
+}
+
+:focus-visible {
+  outline: 2px solid var(--yellow);
+  outline-offset: 3px;
+  border-radius: 2px;
+}
+
+a { color: inherit; }
+
+/* ── shared chalkboard surface ─────────────────────────────── */
+.board-surface {
+  position: relative;
+  background: var(--board);
+}
+.board-surface::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0.5;
+  z-index: 1;
+  background-image:
+    radial-gradient(1px 1px at 12% 18%, rgba(238,241,228,0.35) 0, transparent 60%),
+    radial-gradient(1px 1px at 78% 32%, rgba(238,241,228,0.28) 0, transparent 60%),
+    radial-gradient(1px 1px at 34% 67%, rgba(238,241,228,0.3) 0, transparent 60%),
+    radial-gradient(1.5px 1.5px at 61% 81%, rgba(238,241,228,0.22) 0, transparent 60%),
+    radial-gradient(1px 1px at 91% 58%, rgba(238,241,228,0.25) 0, transparent 60%),
+    radial-gradient(1px 1px at 24% 91%, rgba(238,241,228,0.2) 0, transparent 60%),
+    radial-gradient(1px 1px at 6% 44%, rgba(238,241,228,0.22) 0, transparent 60%),
+    radial-gradient(1px 1px at 54% 12%, rgba(238,241,228,0.2) 0, transparent 60%);
+  background-size: 100% 100%;
+  mix-blend-mode: screen;
+}
+
+/* chalk-dust eraser-smear divider between sections */
+.smear {
+  position: relative;
+  height: 56px;
+  margin: 0 auto;
+  max-width: 920px;
+  z-index: 2;
+}
+.smear svg { width: 100%; height: 100%; display: block; }
+
+/* ── nav ──────────────────────────────────────────────────── */
+.nav {
+  position: fixed;
+  top: 0; left: 0; right: 0;
+  z-index: 40;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 18px clamp(20px, 5vw, 56px);
+  background: linear-gradient(180deg, rgba(15,24,19,0.92), rgba(15,24,19,0));
+  pointer-events: none;
+}
+.nav > * { pointer-events: auto; }
+.nav-mark {
+  font-family: var(--script);
+  font-weight: 700;
+  font-size: 24px;
+  letter-spacing: 0.01em;
+}
+.nav-mark .o { color: var(--yellow); }
+.nav-cta {
+  font-family: var(--hand);
+  font-size: 14.5px;
+  color: var(--board);
+  background: var(--yellow);
+  border: none;
+  padding: 9px 18px;
+  border-radius: 3px;
+  cursor: pointer;
+  box-shadow: 0 3px 10px rgba(0,0,0,0.35);
+  transition: transform 0.15s ease;
+}
+.nav-cta:hover { transform: translateY(-1px); }
+.nav-cta:active { transform: translateY(0); }
+
+/* ── HERO ─────────────────────────────────────────────────── */
+.hero {
+  position: relative;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 120px 24px 80px;
+  text-align: center;
+  isolation: isolate;
+}
+.hero::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  box-shadow: inset 0 0 220px rgba(0,0,0,0.6), inset 0 0 60px rgba(0,0,0,0.4);
+  pointer-events: none;
+}
+.hero::before {
+  content: '';
+  position: absolute;
+  left: 0; right: 0; bottom: 0;
+  height: 140px;
+  z-index: 1;
+  background: linear-gradient(180deg, rgba(28,42,33,0), var(--board));
+  pointer-events: none;
+}
+#hero-canvas {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+  opacity: 0.85;
+}
+.hero-content { position: relative; z-index: 2; max-width: 720px; }
+
+.eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-family: var(--hand);
+  font-size: 13.5px;
+  color: var(--chalk-faint);
+  letter-spacing: 0.03em;
+  padding-bottom: 7px;
+  margin-bottom: 22px;
+  border-bottom: 2px dashed rgba(124,138,120,0.4);
+}
+.eyebrow .pip {
+  width: 6px; height: 6px;
+  border-radius: 50%;
+  background: var(--pink);
+  box-shadow: 0 0 6px rgba(226,163,171,0.6);
+  animation: pulse-pip 2.4s ease-in-out infinite;
+}
+@keyframes pulse-pip {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.35; transform: scale(0.65); }
+}
+
+h1.hero-title {
+  font-family: var(--script);
+  font-weight: 700;
+  font-size: clamp(56px, 11vw, 108px);
+  line-height: 0.98;
+  color: var(--chalk);
+  text-shadow: 0 0 24px rgba(238,241,228,0.16);
+  margin-bottom: 6px;
+}
+h1.hero-title .accent { color: var(--yellow); }
+
+.hero-sub-line {
+  font-family: var(--hand);
+  font-size: clamp(16px, 2.4vw, 19px);
+  color: var(--chalk-dim);
+  line-height: 1.6;
+  max-width: 540px;
+  margin: 18px auto 8px;
+}
+.hero-eq {
+  font-family: var(--mono);
+  font-size: clamp(15px, 2.6vw, 19px);
+  color: var(--amber);
+  letter-spacing: 0.02em;
+  margin-bottom: 34px;
+}
+
+.hero-ctas {
+  display: flex;
+  gap: 14px;
+  justify-content: center;
+  flex-wrap: wrap;
+  margin-bottom: 46px;
+}
+.btn-primary, .btn-ghost {
+  font-family: var(--hand);
+  font-size: 16px;
+  padding: 13px 26px;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: transform 0.15s ease, background 0.15s ease, border-color 0.15s ease;
+}
+.btn-primary {
+  background: var(--yellow);
+  color: var(--board);
+  border: none;
+  box-shadow: 0 6px 18px rgba(236,207,122,0.25);
+}
+.btn-primary:hover { transform: translateY(-2px); }
+.btn-ghost {
+  background: transparent;
+  color: var(--chalk-dim);
+  border: 1.5px solid rgba(238,241,228,0.25);
+}
+.btn-ghost:hover { border-color: var(--chalk-dim); color: var(--chalk); }
+
+.hero-meta {
+  font-family: var(--mono);
+  font-size: 11.5px;
+  color: var(--chalk-faint);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.scroll-cue {
+  position: absolute;
+  bottom: 28px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 2;
+  font-family: var(--mono);
+  font-size: 10.5px;
+  letter-spacing: 0.12em;
+  color: var(--chalk-faint);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  text-transform: uppercase;
+}
+.scroll-cue .chevron {
+  width: 9px; height: 9px;
+  border-right: 1.5px solid var(--chalk-faint);
+  border-bottom: 1.5px solid var(--chalk-faint);
+  transform: rotate(45deg);
+  animation: bob 1.8s ease-in-out infinite;
+}
+@keyframes bob {
+  0%, 100% { transform: rotate(45deg) translate(0,0); opacity: 0.5; }
+  50% { transform: rotate(45deg) translate(3px,3px); opacity: 1; }
+}
+
+/* ── CHALK LEDGER (stat strip) ───────────────────────────── */
+.ledger {
+  position: relative;
+  z-index: 2;
+  padding: 56px 24px 8px;
+  max-width: 920px;
+  margin: 0 auto;
+  display: flex;
+  justify-content: space-between;
+  gap: 18px;
+  flex-wrap: wrap;
+}
+.ledger-item {
+  flex: 1 1 160px;
+  text-align: center;
+  padding: 0 12px;
+  position: relative;
+}
+.ledger-item:not(:last-child)::after {
+  content: '';
+  position: absolute;
+  right: -9px; top: 8px; bottom: 8px;
+  width: 1px;
+  background: rgba(238,241,228,0.12);
+}
+.ledger-num {
+  font-family: var(--mono);
+  font-weight: 700;
+  font-size: clamp(22px, 3vw, 28px);
+  color: var(--yellow);
+  letter-spacing: 0.01em;
+}
+.ledger-num .unit { font-size: 0.55em; color: var(--chalk-faint); margin-left: 2px; font-weight: 400; }
+.ledger-label {
+  font-family: var(--hand);
+  font-size: 13px;
+  color: var(--chalk-dim);
+  margin-top: 6px;
+}
+@media (max-width: 700px) {
+  .ledger { gap: 28px 12px; }
+  .ledger-item:nth-child(2n)::after { display: none; }
+}
+
+/* ── INTRO STATEMENT ──────────────────────────────────────── */
+.intro {
+  padding: 60px 24px 70px;
+  max-width: 760px;
+  margin: 0 auto;
+  position: relative;
+  z-index: 2;
+  text-align: center;
+}
+.intro-label {
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--chalk-faint);
+  margin-bottom: 18px;
+}
+.intro p {
+  font-family: var(--script);
+  font-weight: 600;
+  font-size: clamp(24px, 4vw, 34px);
+  line-height: 1.35;
+  color: var(--chalk-dim);
+}
+.intro strong { color: var(--chalk); font-weight: 400; }
+.intro .hl-yellow { color: var(--yellow); }
+.intro .hl-amber { color: var(--amber); }
+
+/* ── MODE SECTION (the four lectures) ────────────────────── */
+.modes {
+  position: relative;
+  z-index: 2;
+  padding: 40px 24px 100px;
+  max-width: 1080px;
+  margin: 0 auto;
+}
+.modes-head {
+  text-align: center;
+  margin-bottom: 56px;
+}
+.modes-head h2 {
+  font-family: var(--script);
+  font-weight: 700;
+  font-size: clamp(34px, 5vw, 46px);
+  color: var(--chalk);
+  margin-bottom: 10px;
+}
+.modes-head p {
+  font-family: var(--hand);
+  font-size: 15.5px;
+  color: var(--chalk-dim);
+  max-width: 480px;
+  margin: 0 auto;
+}
+
+.mode-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.mode-row {
+  display: grid;
+  grid-template-columns: 64px 1fr 156px;
+  align-items: center;
+  gap: 28px;
+  padding: 28px 22px;
+  border-top: 1.5px dashed rgba(238,241,228,0.14);
+  border-left: 2px solid transparent;
+  transition: background 0.2s ease, border-left-color 0.2s ease, padding-left 0.2s ease;
+}
+.mode-row:last-child { border-bottom: 1.5px dashed rgba(238,241,228,0.14); }
+.mode-row:hover {
+  background: rgba(238,241,228,0.025);
+  border-left-color: var(--yellow);
+  padding-left: 18px;
+}
+.mode-row:hover .mode-num { color: var(--yellow); }
+.mode-row:hover .mode-sketch svg { transform: scale(1.06); }
+.mode-row:hover .mode-sketch svg path,
+.mode-row:hover .mode-sketch svg circle { opacity: 1 !important; }
+
+.mode-num {
+  font-family: var(--mono);
+  font-size: 13px;
+  color: var(--chalk-faint);
+  letter-spacing: 0.04em;
+  transition: color 0.2s ease;
+}
+.mode-body h3 {
+  font-family: var(--script);
+  font-weight: 700;
+  font-size: 24px;
+  color: var(--chalk);
+  margin-bottom: 6px;
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+}
+.mode-body h3 .mode-eq {
+  font-family: var(--mono);
+  font-size: 13px;
+  font-weight: 400;
+  color: var(--amber);
+  letter-spacing: 0.01em;
+}
+.mode-body p {
+  font-family: var(--hand);
+  font-size: 14.5px;
+  line-height: 1.55;
+  color: var(--chalk-dim);
+  max-width: 520px;
+}
+.mode-sketch {
+  width: 100%;
+  height: 110px;
+  justify-self: end;
+}
+.mode-sketch svg { width: 100%; height: 100%; transition: transform 0.25s ease; }
+
+@media (max-width: 760px) {
+  .mode-row { grid-template-columns: 40px 1fr; }
+  .mode-row:hover { padding-left: 22px; }
+  .mode-sketch { grid-column: 1 / -1; justify-self: stretch; height: 64px; margin-top: 4px; }
+}
+
+/* ── READINGS PREVIEW (the actual UI element, as social proof of craft) ── */
+.preview {
+  position: relative;
+  z-index: 2;
+  padding: 20px 24px 110px;
+  max-width: 1080px;
+  margin: 0 auto;
+  display: flex;
+  gap: 56px;
+  align-items: center;
+}
+.preview-copy { flex: 1 1 360px; min-width: 280px; }
+.preview-copy .intro-label { text-align: left; }
+.preview-copy h2 {
+  font-family: var(--script);
+  font-weight: 700;
+  font-size: clamp(28px, 4vw, 38px);
+  color: var(--chalk);
+  margin-bottom: 16px;
+  line-height: 1.1;
+}
+.preview-copy p {
+  font-family: var(--hand);
+  font-size: 15px;
+  line-height: 1.65;
+  color: var(--chalk-dim);
+  margin-bottom: 14px;
+}
+.preview-copy ul {
+  list-style: none;
+  margin-top: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 11px;
+}
+.preview-copy li {
+  font-family: var(--hand);
+  font-size: 14.5px;
+  color: var(--chalk-dim);
+  display: flex;
+  gap: 10px;
+  align-items: baseline;
+}
+.preview-copy li::before {
+  content: '—';
+  color: var(--yellow);
+  flex-shrink: 0;
+}
+
+.preview-card-wrap {
+  flex: 0 0 320px;
+  position: relative;
+}
+/* a faithful miniature of the in-app "readings" plate */
+.plate-demo {
+  background: var(--paper);
+  color: #2a2218;
+  border-radius: 2px;
+  padding: 16px 18px 14px;
+  transform: rotate(2deg);
+  box-shadow: 0 14px 30px rgba(0,0,0,0.45), 0 1px 0 rgba(255,255,255,0.4) inset;
+  position: relative;
+}
+.plate-demo::before {
+  content: '';
+  position: absolute;
+  top: -10px; left: 50%;
+  transform: translateX(-50%) rotate(-3deg);
+  width: 70px; height: 22px;
+  background: var(--tape);
+  opacity: 0.85;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.25);
+}
+.plate-demo-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+  padding-bottom: 7px;
+  border-bottom: 1.5px dashed var(--paper-line);
+}
+.plate-demo-header span:first-child {
+  font-family: var(--script);
+  font-weight: 700;
+  font-size: 18px;
+  color: #6b4a2f;
+  flex: 1;
+}
+.plate-demo .live-dot {
+  width: 6px; height: 6px;
+  border-radius: 50%;
+  background: #b3433a;
+  animation: pulse-pip 1.6s ease-in-out infinite;
+}
+.plate-demo-rows { display: flex; flex-direction: column; gap: 6px; }
+.plate-demo .p-row { display: flex; justify-content: space-between; align-items: baseline; gap: 14px; }
+.plate-demo .p-label { font-family: var(--mono); font-size: 11px; color: #8a7256; letter-spacing: 0.04em; }
+.plate-demo .p-val { font-family: var(--mono); font-size: 13px; font-weight: 700; color: #2a2218; }
+.plate-demo .p-val.amber { color: #b3433a; }
+
+@media (max-width: 760px) {
+  .preview { flex-direction: column; }
+  .preview-card-wrap { flex-basis: auto; width: 100%; max-width: 320px; }
+}
+
+/* ── CONTROL DECK (ruler + mode tabs replica) ─────────────── */
+.deck {
+  position: relative;
+  z-index: 2;
+  padding: 10px 24px 110px;
+  max-width: 880px;
+  margin: 0 auto;
+  text-align: center;
+}
+.deck .intro-label { text-align: center; margin-bottom: 14px; }
+.deck h2 {
+  font-family: var(--script);
+  font-weight: 700;
+  font-size: clamp(28px, 4vw, 38px);
+  color: var(--chalk);
+  margin-bottom: 14px;
+}
+.deck > p {
+  font-family: var(--hand);
+  font-size: 15px;
+  line-height: 1.6;
+  color: var(--chalk-dim);
+  max-width: 480px;
+  margin: 0 auto 40px;
+}
+
+.deck-demo {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  text-align: left;
+}
+.ruler-demo {
+  background: var(--board-2);
+  border: 1.5px solid rgba(238,241,228,0.16);
+  border-radius: 8px;
+  padding: 14px 20px;
+  box-shadow: 0 4px 14px rgba(0,0,0,0.3);
+}
+.ruler-demo-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin-bottom: 10px;
+}
+.ruler-demo-label { font-family: var(--hand); font-size: 14px; color: var(--chalk-dim); }
+.ruler-demo-val { font-family: var(--mono); font-size: 13px; font-weight: 700; color: var(--yellow); }
+.ruler-demo-track {
+  position: relative;
+  height: 22px;
+  display: flex;
+  align-items: center;
+}
+.ruler-demo-track::before {
+  content: '';
+  position: absolute;
+  left: 0; right: 0; top: 50%;
+  height: 2px;
+  background: rgba(238,241,228,0.3);
+  border-radius: 1px;
+}
+.ruler-demo-track::after {
+  content: '';
+  position: absolute;
+  left: 0; right: 0; top: 0; bottom: 0;
+  background-image: repeating-linear-gradient(90deg, rgba(238,241,228,0.35) 0, rgba(238,241,228,0.35) 1px, transparent 1px, transparent 9%);
+  opacity: 0.5;
+}
+.ruler-demo-thumb {
+  position: absolute;
+  left: 62%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: 26px; height: 11px;
+  border-radius: 5px;
+  background: linear-gradient(180deg, #fff8e8, var(--yellow));
+  border: 1px solid rgba(0,0,0,0.2);
+  box-shadow: 0 2px 6px rgba(0,0,0,0.45);
+}
+
+.tabs-demo {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  border: 1.5px solid rgba(238,241,228,0.16);
+  border-radius: 8px;
+  overflow: hidden;
+}
+.tab-demo {
+  font-family: var(--hand);
+  font-size: 14px;
+  color: var(--chalk-faint);
+  padding: 13px 16px;
+  border-right: 1px solid rgba(238,241,228,0.12);
+  border-bottom: 1px solid rgba(238,241,228,0.12);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.tab-demo .num { font-family: var(--mono); font-size: 10px; }
+.tab-demo.active { background: var(--yellow); color: var(--board); font-weight: 700; }
+.tab-demo.active .num { color: rgba(28,42,33,0.55); }
+.tab-demo:nth-child(2n) { border-right: none; }
+.tab-demo:nth-child(3), .tab-demo:nth-child(4) { border-bottom: none; }
+
+@media (max-width: 600px) {
+  .deck-demo { max-width: 360px; margin: 0 auto; }
+}
+
+/* ── OFFICE HOURS (FAQ) ───────────────────────────────────── */
+.office {
+  position: relative;
+  z-index: 2;
+  padding: 20px 24px 110px;
+  max-width: 760px;
+  margin: 0 auto;
+}
+.office-head { text-align: center; margin-bottom: 50px; }
+.office-head h2 {
+  font-family: var(--script);
+  font-weight: 700;
+  font-size: clamp(32px, 5vw, 44px);
+  color: var(--chalk);
+  margin-bottom: 10px;
+}
+.office-head p {
+  font-family: var(--hand);
+  font-size: 15px;
+  color: var(--chalk-dim);
+}
+
+.qa-list { display: flex; flex-direction: column; gap: 0; }
+.qa-item {
+  border-top: 1.5px dashed rgba(238,241,228,0.14);
+  padding: 26px 4px;
+}
+.qa-item:last-child { border-bottom: 1.5px dashed rgba(238,241,228,0.14); }
+.qa-q {
+  font-family: var(--script);
+  font-weight: 700;
+  font-size: 21px;
+  color: var(--yellow);
+  margin-bottom: 9px;
+  display: flex;
+  gap: 10px;
+}
+.qa-q .mark { color: var(--chalk-faint); font-family: var(--mono); font-size: 14px; flex-shrink: 0; margin-top: 4px; }
+.qa-a {
+  font-family: var(--hand);
+  font-size: 15px;
+  line-height: 1.65;
+  color: var(--chalk-dim);
+  padding-left: 28px;
+}
+.qa-a code {
+  font-family: var(--mono);
+  font-size: 13.5px;
+  color: var(--amber);
+  background: rgba(238,241,228,0.06);
+  padding: 1px 5px;
+  border-radius: 3px;
+}
+
+/* ── FINAL CTA ────────────────────────────────────────────── */
+.final {
+  position: relative;
+  z-index: 2;
+  text-align: center;
+  padding: 110px 24px 70px;
+}
+.final h2 {
+  font-family: var(--script);
+  font-weight: 700;
+  font-size: clamp(38px, 6vw, 58px);
+  color: var(--chalk);
+  margin-bottom: 14px;
+}
+.final h2 .amber { color: var(--amber); }
+.final p {
+  font-family: var(--hand);
+  font-size: 16px;
+  color: var(--chalk-dim);
+  max-width: 460px;
+  margin: 0 auto 32px;
+}
+
+footer {
+  position: relative;
+  z-index: 2;
+  padding: 20px 24px 36px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+footer .nav-mark { font-size: 18px; }
+footer .foot-meta {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--chalk-faint);
+  letter-spacing: 0.04em;
+}
+
+.further {
+  position: relative;
+  z-index: 2;
+  max-width: 1080px;
+  margin: 0 auto;
+  padding: 0 24px;
+}
+.further-inner {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 28px;
+  padding: 38px 0 14px;
+  border-top: 1.5px solid rgba(238,241,228,0.1);
+}
+.further-col { flex: 1 1 220px; min-width: 200px; }
+.further-col h4 {
+  font-family: var(--mono);
+  font-size: 10.5px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--chalk-faint);
+  margin-bottom: 12px;
+}
+.further-col ul { list-style: none; display: flex; flex-direction: column; gap: 8px; }
+.further-col li {
+  font-family: var(--hand);
+  font-size: 13.5px;
+  color: var(--chalk-dim);
+}
+.further-col li span.src {
+  display: block;
+  font-family: var(--mono);
+  font-size: 10.5px;
+  color: var(--chalk-faint);
+  margin-top: 1px;
+}
+
+.colophon {
+  position: relative;
+  z-index: 2;
+  max-width: 1080px;
+  margin: 0 auto;
+  padding: 6px 24px 0;
+}
+.colophon-note {
+  display: inline-block;
+  font-family: var(--script);
+  font-size: 15px;
+  color: var(--chalk-faint);
+  transform: rotate(-1.4deg);
+  opacity: 0.85;
+}
+.colophon-note .nib { color: var(--pink); }
+</style>
+</head>
+<body>
+
+<nav class="nav">
+  <div class="nav-mark">Tachy<span class="o">ω</span>n</div>
+  <button class="nav-cta" id="nav-open">Open the lecture</button>
+</nav>
+
+<!-- ════════════════════ HERO ════════════════════ -->
+<section class="hero board-surface">
+  <canvas id="hero-canvas"></canvas>
+
+  <div class="hero-content">
+    <div class="eyebrow"><span class="pip"></span>An interactive lecture note &nbsp;·&nbsp; v &gt; c, no real rest frame</div>
+    <h1 class="hero-title">Tachy<span class="accent">ω</span>n</h1>
+    <div class="hero-sub-line">A particle that's never seen slower than light, taught the way a good professor would: chalk in hand, equation first, shape second.</div>
+    <div class="hero-eq">E² = p²c² − m²c⁴ &nbsp;→&nbsp; flip the sign on m², watch the geometry invert</div>
+
+    <div class="hero-ctas">
+      <button class="btn-primary" id="hero-open">Step up to the board</button>
+      <button class="btn-ghost" id="hero-scroll">What's actually in it</button>
+    </div>
+
+    <div class="hero-meta">Four lectures · one chalkboard · zero rest frame</div>
+  </div>
+
+  <div class="scroll-cue"><span>scroll</span><span class="chevron"></span></div>
+</section>
+
+<div class="board-surface">
+<div class="smear"><svg viewBox="0 0 920 56" preserveAspectRatio="none"><path d="M0 28 Q 40 12, 90 26 T 180 24 Q 230 38, 290 22 T 400 27 Q 460 14, 520 28 T 640 23 Q 700 36, 760 25 T 920 26" stroke="rgba(238,241,228,0.16)" stroke-width="10" fill="none" stroke-linecap="round"/></svg></div>
+
+<div class="ledger">
+  <div class="ledger-item">
+    <div class="ledger-num">4</div>
+    <div class="ledger-label">consequences of one sign flip</div>
+  </div>
+  <div class="ledger-item">
+    <div class="ledger-num">60<span class="unit">fps</span></div>
+    <div class="ledger-label">live, on the geometry you're holding</div>
+  </div>
+  <div class="ledger-item">
+    <div class="ledger-num">m²&lt;0</div>
+    <div class="ledger-label">the only assumption the whole board rests on</div>
+  </div>
+  <div class="ledger-item">
+    <div class="ledger-num">0</div>
+    <div class="ledger-label">logins, installs, or loading screens that stick around</div>
+  </div>
+</div>
+
+<!-- ════════════════════ INTRO STATEMENT ════════════════════ -->
+<section class="intro">
+  <div class="intro-label">Why a tachyon, why now</div>
+  <p>Special relativity doesn't <strong>forbid</strong> faster-than-light particles — it just makes their mass <span class="hl-amber">imaginary</span> and erases their rest frame. Tachyon turns that one algebraic flip into <span class="hl-yellow">four explorable 3D shapes</span>, each one a different consequence of the same broken sign.</p>
+</section>
+
+<div class="smear smear-double"><svg viewBox="0 0 920 56" preserveAspectRatio="none"><path d="M0 30 Q 50 16, 100 30 T 220 26 Q 270 40, 330 24 T 450 29 Q 500 16, 560 30 T 680 25 Q 740 38, 800 22 T 920 28" stroke="rgba(238,241,228,0.16)" stroke-width="10" fill="none" stroke-linecap="round"/><path d="M0 24 Q 60 38, 120 22 T 250 30 Q 300 16, 360 32 T 480 24 Q 540 38, 600 24 T 730 30 Q 790 16, 850 30 T 920 22" stroke="rgba(238,241,228,0.10)" stroke-width="7" fill="none" stroke-linecap="round"/></svg></div>
+
+<!-- ════════════════════ MODES ════════════════════ -->
+<section class="modes">
+  <div class="modes-head">
+    <h2>Four boards, one particle</h2>
+    <p>Each mode is its own small lecture — drag the slider, rotate the camera, and watch the consequence play out in three dimensions.</p>
+  </div>
+
+  <div class="mode-list">
+    <div class="mode-row">
+      <div class="mode-num">01</div>
+      <div class="mode-body">
+        <h3>Energy–momentum <span class="mode-eq">E² = p²c² − m²c⁴</span></h3>
+        <p>Flip the sign on m² and the two-sheeted hyperboloid of an ordinary particle opens into one continuous surface with a throat at |p| = √(−m²). There's no point on it where the particle is at rest.</p>
+      </div>
+      <div class="mode-sketch">
+        <svg viewBox="0 0 160 84" fill="none"><path d="M20 18 C40 8, 120 8, 140 18 C120 28, 40 28, 20 18 Z" stroke="#9bc4d2" stroke-width="1.8" opacity="0.9"/><path d="M30 30 C45 50, 115 50, 130 30" stroke="#e8a23d" stroke-width="1.8" opacity="0.9"/><path d="M30 30 C45 60, 115 60, 130 30" stroke="#e8a23d" stroke-width="1.3" opacity="0.5"/></svg>
+      </div>
+    </div>
+
+    <div class="mode-row">
+      <div class="mode-num">02</div>
+      <div class="mode-body">
+        <h3>Light cone <span class="mode-eq">Δx &gt; cΔt</span></h3>
+        <p>A tachyon's worldline runs outside the light cone, linking two events no slower-than-light signal could connect. Different observers disagree about which one happened first — the seed of the tachyonic-antitelephone paradox.</p>
+      </div>
+      <div class="mode-sketch">
+        <svg viewBox="0 0 160 84" fill="none"><path d="M80 6 L140 76 M80 6 L20 76 M20 76 L140 76" stroke="#9bc4d2" stroke-width="1.8" opacity="0.9"/><path d="M30 60 L130 28" stroke="#e8a23d" stroke-width="2"/></svg>
+      </div>
+    </div>
+
+    <div class="mode-row">
+      <div class="mode-num">03</div>
+      <div class="mode-body">
+        <h3>Imaginary mass <span class="mode-eq">m = iμ, μ ∈ ℝ</span></h3>
+        <p>Writing m² = −μ² makes the rest mass itself imaginary. Below the threshold |p| = μ, the real energy–momentum relation has no real solution — the surface dips into a region with no physical particle on it.</p>
+      </div>
+      <div class="mode-sketch">
+        <svg viewBox="0 0 160 84" fill="none"><path d="M20 20 C40 10, 120 10, 140 20 C120 30, 40 30, 20 20 Z" stroke="#9bc4d2" stroke-width="1.8" opacity="0.9"/><path d="M55 30 C60 48, 100 48, 105 30" stroke="#9a7fe0" stroke-width="1.8" opacity="0.9"/></svg>
+      </div>
+    </div>
+
+    <div class="mode-row">
+      <div class="mode-num">04</div>
+      <div class="mode-body">
+        <h3>Cherenkov shock <span class="mode-eq">cosθ_c = c / v</span></h3>
+        <p>A charged tachyon can't avoid this one: it sheds vacuum Cherenkov photons into a forward shock cone. Losing energy this way makes it speed up further — a runaway with no terminal velocity, the mirror image of ordinary Cherenkov radiation.</p>
+      </div>
+      <div class="mode-sketch">
+        <svg viewBox="0 0 160 84" fill="none"><path d="M80 4 L80 80" stroke="#ffd28a" stroke-width="2"/><path d="M80 30 L40 78 M80 30 L120 78" stroke="#5ad8e6" stroke-width="1.6" opacity="0.85"/><circle cx="55" cy="58" r="2.4" fill="#e8a23d"/><circle cx="100" cy="62" r="2" fill="#e8a23d"/><circle cx="68" cy="70" r="2" fill="#e8a23d"/></svg>
+      </div>
+    </div>
+  </div>
+</section>
+
+<div class="smear"><svg viewBox="0 0 920 56" preserveAspectRatio="none"><path d="M0 24 Q 50 36, 100 22 T 220 28 Q 270 14, 330 30 T 450 24 Q 500 38, 560 22 T 680 28 Q 740 14, 800 30 T 920 24" stroke="rgba(238,241,228,0.16)" stroke-width="10" fill="none" stroke-linecap="round"/></svg></div>
+
+<!-- ════════════════════ CONTROL DECK ════════════════════ -->
+<section class="deck">
+  <div class="intro-label">Held in the hand, not just watched</div>
+  <h2>Every board has a chalk tray</h2>
+  <p>The slider and the lecture tabs are the only two controls in the whole app — drag one to bend the geometry in real time, tap the other to flip to a different consequence of the same equation.</p>
+
+  <div class="deck-demo">
+    <div class="ruler-demo">
+      <div class="ruler-demo-top">
+        <span class="ruler-demo-label">m² — tachyonic mass²</span>
+        <span class="ruler-demo-val">−1.00</span>
+      </div>
+      <div class="ruler-demo-track"><div class="ruler-demo-thumb"></div></div>
+    </div>
+
+    <div class="tabs-demo">
+      <div class="tab-demo active"><span class="num">01</span>Energy–momentum</div>
+      <div class="tab-demo"><span class="num">02</span>Light cone</div>
+      <div class="tab-demo"><span class="num">03</span>Imaginary mass</div>
+      <div class="tab-demo"><span class="num">04</span>Cherenkov</div>
+    </div>
+  </div>
+</section>
+
+<div class="smear"><svg viewBox="0 0 920 56" preserveAspectRatio="none"><path d="M0 26 Q 60 38, 110 24 T 240 28 Q 290 14, 350 30 T 470 24 Q 520 38, 580 22 T 700 28 Q 760 16, 820 30 T 920 25" stroke="rgba(238,241,228,0.16)" stroke-width="10" fill="none" stroke-linecap="round"/></svg></div>
+
+<!-- ════════════════════ PREVIEW: the readings plate ════════════════════ -->
+<section class="preview">
+  <div class="preview-copy">
+    <div class="intro-label">Built for the board, not a dashboard</div>
+    <h2>Numbers stay where the chalk would put them</h2>
+    <p>Every reading you'd want — the mass², the energy ratio, the speed, the frame rate — sits on a taped index card, exactly where a professor would pin a quick reference. Tap it and it tucks away to the edge of the screen, out of the way of the geometry it's describing.</p>
+    <ul>
+      <li>Live readouts tied to the slider you're holding, not a static caption</li>
+      <li>Collapses to a docked tab on phones, never blocking the board</li>
+      <li>Hand-set in the same chalk and paper as the rest of the lecture</li>
+    </ul>
+  </div>
+
+  <div class="preview-card-wrap">
+    <div class="plate-demo">
+      <div class="plate-demo-header">
+        <span>readings</span>
+        <div class="live-dot"></div>
+      </div>
+      <div class="plate-demo-rows">
+        <div class="p-row"><span class="p-label">m²</span><span class="p-val">−1.00</span></div>
+        <div class="p-row"><span class="p-label">E / mc²</span><span class="p-val amber">0.50</span></div>
+        <div class="p-row"><span class="p-label">v / c</span><span class="p-val">1.60c</span></div>
+        <div class="p-row"><span class="p-label">fps</span><span class="p-val" style="color:#9a8a6e">60</span></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<div class="smear smear-circle"><svg viewBox="0 0 920 56" preserveAspectRatio="none"><path d="M0 28 Q 40 12, 90 26 T 180 24 Q 230 38, 290 22 T 400 27 Q 460 14, 520 28 T 640 23 Q 700 36, 760 25 T 920 26" stroke="rgba(238,241,228,0.16)" stroke-width="10" fill="none" stroke-linecap="round"/><ellipse cx="671" cy="28" rx="46" ry="17" stroke="rgba(236,207,122,0.3)" stroke-width="2" fill="none" transform="rotate(-4 671 28)"/></svg></div>
+
+<!-- ════════════════════ OFFICE HOURS (FAQ) ════════════════════ -->
+<section class="office">
+  <div class="office-head">
+    <h2>Office hours</h2>
+    <p>The questions that come up after the lecture, answered the way they'd get answered after class.</p>
+  </div>
+
+  <div class="qa-list">
+    <div class="qa-item">
+      <div class="qa-q"><span class="mark">Q.</span><span>Do tachyons actually exist?</span></div>
+      <div class="qa-a">As far as every experiment to date can tell, no. They're a legal solution to the relativistic energy–momentum equation, not a confirmed particle — closer to a "what would have to be true" than a "here's one in a detector." Tachyon treats that distinction honestly: it's visualizing the math, not claiming a discovery.</div>
+    </div>
+    <div class="qa-item">
+      <div class="qa-q"><span class="mark">Q.</span><span>Then why does any of this matter?</span></div>
+      <div class="qa-a">Because the consequences of <code>m² &lt; 0</code> are fully determined the moment you write the equation down — causality violations, imaginary energy thresholds, a Cherenkov cone with no terminal speed. Working through what a forbidden object would look like is a standard way physicists stress-test what "forbidden" really means.</div>
+    </div>
+    <div class="qa-item">
+      <div class="qa-q"><span class="mark">Q.</span><span>Why does the cone glow at the throat?</span></div>
+      <div class="qa-a">That's the locus where <code>|p| = √(−m²)</code> — the minimum momentum a real solution can have. It's not decorative; the brightness is standing in for how close a state sits to that boundary, the same way a professor might circle the one point on a diagram that actually matters.</div>
+    </div>
+    <div class="qa-item">
+      <div class="qa-q"><span class="mark">Q.</span><span>Can I use this in an actual class?</span></div>
+      <div class="qa-a">Yes — open any of the four lectures, drag the slider in front of students, and let them watch the surface deform instead of describing it verbally. No login, no install, just the board.</div>
+    </div>
+  </div>
+</section>
+
+<div class="smear"><svg viewBox="0 0 920 56" preserveAspectRatio="none"><path d="M0 26 Q 60 38, 110 24 T 240 28 Q 290 14, 350 30 T 470 24 Q 520 38, 580 22 T 700 28 Q 760 16, 820 30 T 920 25" stroke="rgba(238,241,228,0.16)" stroke-width="10" fill="none" stroke-linecap="round"/></svg></div>
+
+<!-- ════════════════════ FINAL CTA ════════════════════ -->
+<section class="final">
+  <h2>No rest frame.<br>No reason to <span class="amber">wait</span>.</h2>
+  <p>Open the chalkboard and start at lecture 01 — or jump straight to the Cherenkov shock if you already know your light cones.</p>
+  <button class="btn-primary" id="final-open">Open the lecture</button>
+</section>
+
+<div class="further">
+  <div class="further-inner">
+    <div class="further-col">
+      <h4>On this board</h4>
+      <ul>
+        <li>Energy–momentum relation<span class="src">E² = p²c² − m²c⁴</span></li>
+        <li>Minkowski light cones<span class="src">Δx vs cΔt</span></li>
+        <li>Imaginary rest mass<span class="src">m = iμ</span></li>
+        <li>Vacuum Cherenkov radiation<span class="src">cosθ_c = c / v</span></li>
+      </ul>
+    </div>
+    <div class="further-col">
+      <h4>Further reading</h4>
+      <ul>
+        <li>Feinberg, "Possibility of Faster-Than-Light Particles"<span class="src">Phys. Rev., 1967</span></li>
+        <li>Recami, "Classical Tachyons and Possible Applications"<span class="src">Riv. Nuovo Cim., 1986</span></li>
+      </ul>
+    </div>
+    <div class="further-col">
+      <h4>The lecture</h4>
+      <ul>
+        <li>Four interactive 3D modes</li>
+        <li>One slider, one set of tabs</li>
+        <li>Runs entirely in the browser</li>
+      </ul>
+    </div>
+  </div>
+</div>
+
+<div class="colophon">
+  <div class="colophon-note"><span class="nib">✎</span> erase before next period — board stays up till then</div>
+</div>
+
+<footer>
+  <div class="nav-mark">Tachy<span class="o" style="color:var(--yellow)">ω</span>n</div>
+  <div class="foot-meta">LECTURE NOTE · v &gt; c · NO REAL REST FRAME</div>
+</footer>
+</div>
+
+<script>
+(function(){
+  "use strict";
+
+  // Smooth-scroll the "what's actually in it" hero button to the modes section.
+  var scrollBtn = document.getElementById('hero-scroll');
+  if(scrollBtn){
+    scrollBtn.addEventListener('click', function(){
+      var target = document.querySelector('.modes');
+      if(target) target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+  }
+
+  // CTA buttons are wired as placeholders — point them at the actual
+  // app file/route in production.
+  ['hero-open', 'final-open', 'nav-open'].forEach(function(id){
+    var el = document.getElementById(id);
+    if(el) el.addEventListener('click', function(){
+      window.location.href = 'simulation.html';
+    });
+  });
+
+  // ---------- hero canvas: lightweight ambient hyperboloid wireframe ----------
+  // A restrained, dependency-free 2D-projected wireframe (no three.js needed
+  // for the landing page) that echoes the real in-app 3D shape and slowly
+  // rotates behind the headline.
+  var canvas = document.getElementById('hero-canvas');
+  var reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  if(canvas && canvas.getContext){
+    var ctx = canvas.getContext('2d');
+    var dpr = Math.min(window.devicePixelRatio || 1, 2);
+    var w, h, cx, cy, scale;
+
+    function resize(){
+      w = canvas.clientWidth; h = canvas.clientHeight;
+      canvas.width = w * dpr; canvas.height = h * dpr;
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      cx = w / 2; cy = h * 0.52;
+      scale = Math.min(w, h) * 0.40;
+    }
+    window.addEventListener('resize', resize);
+    resize();
+
+    // Build a hyperboloid-of-one-sheet point grid: x = a*cosh(v)*cos(u), y = a*sinh(v)... etc,
+    // but kept purely 2D-illustrative (matches the in-app silhouette without re-deriving physics here).
+    var ULINES = 22, VSTEPS = 26, VRANGE = 1.15;
+    function buildRings(){
+      var rings = [];
+      for(var ui = 0; ui <= ULINES; ui++){
+        var u = (ui / ULINES) * Math.PI * 2;
+        var ring = [];
+        for(var vi = -VSTEPS; vi <= VSTEPS; vi++){
+          var v = (vi / VSTEPS) * VRANGE;
+          var r = Math.cosh(v) * 0.55;
+          var y = Math.sinh(v) * 0.62;
+          ring.push({ x: r * Math.cos(u), y: y, z: r * Math.sin(u) });
+        }
+        rings.push(ring);
+      }
+      return rings;
+    }
+    var rings = buildRings();
+
+    var theta = 0.6, autoSpin = reduceMotion ? 0 : 0.0011;
+    function project(p, t){
+      // rotate around Y axis by t
+      var cosT = Math.cos(t), sinT = Math.sin(t);
+      var x = p.x * cosT - p.z * sinT;
+      var z = p.x * sinT + p.z * cosT;
+      var y = p.y;
+      // simple perspective
+      var persp = 3.1 / (3.1 - z * 0.5);
+      return { x: cx + x * scale * persp, y: cy - y * scale * persp, depth: z };
+    }
+
+    function draw(){
+      ctx.clearRect(0, 0, w, h);
+      theta += autoSpin;
+
+      rings.forEach(function(ring, idx){
+        ctx.beginPath();
+        var first = true;
+        var avgZ = 0;
+        ring.forEach(function(p, i){
+          var pr = project(p, theta);
+          avgZ += pr.depth;
+          if(first){ ctx.moveTo(pr.x, pr.y); first = false; }
+          else { ctx.lineTo(pr.x, pr.y); }
+        });
+        avgZ /= ring.length;
+        var alpha = 0.05 + 0.10 * ((avgZ + 1) / 2);
+        ctx.strokeStyle = 'rgba(155,196,210,' + alpha.toFixed(3) + ')';
+        ctx.lineWidth = 1;
+        ctx.stroke();
+      });
+
+      if(!reduceMotion) requestAnimationFrame(draw);
+    }
+    draw();
+  }
+})();
+</script>
+</body>
+</html>

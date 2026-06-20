@@ -1,0 +1,1431 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>Tachyon — Lecture Notes on a Faster-Than-Light Particle</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Caveat:wght@500;600;700&family=Patrick+Hand&family=Space+Mono:ital,wght@0,400;0,700;1,400&display=swap" rel="stylesheet">
+<style>
+:root {
+  --board: #1c2a21;
+  --board-2: #18241c;
+  --board-edge: #0f1813;
+  --chalk: #eef1e4;
+  --chalk-dim: #b9c2b0;
+  --chalk-faint: #7c8a78;
+  --yellow: #eccf7a;
+  --yellow-dim: rgba(236,207,122,0.16);
+  --pink: #e2a3ab;
+  --pink-dim: rgba(226,163,171,0.14);
+  --blue: #9bc4d2;
+  --blue-dim: rgba(155,196,210,0.14);
+  --paper: #efe9d6;
+  --paper-line: #c9a98f;
+  --tape: rgba(236,207,122,0.55);
+  --hand: 'Patrick Hand', cursive;
+  --script: 'Caveat', cursive;
+  --mono: 'Space Mono', 'IBM Plex Mono', monospace;
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+html, body {
+  background: var(--board-edge);
+  color: var(--chalk);
+  font-family: var(--hand);
+  overflow: hidden;
+  overscroll-behavior: none;
+  height: 100%;
+  width: 100%;
+  touch-action: none;
+}
+
+#app {
+  position: relative;
+  width: 100%;
+  height: 100vh;
+  height: 100dvh;
+  background: var(--board);
+}
+canvas { display: block; touch-action: none; }
+
+/* Chalk-dust speckle texture + soft vignette, no images */
+#app::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 1;
+  opacity: 0.5;
+  background-image:
+    radial-gradient(1px 1px at 12% 18%, rgba(238,241,228,0.35) 0, transparent 60%),
+    radial-gradient(1px 1px at 78% 32%, rgba(238,241,228,0.28) 0, transparent 60%),
+    radial-gradient(1px 1px at 34% 67%, rgba(238,241,228,0.3) 0, transparent 60%),
+    radial-gradient(1.5px 1.5px at 61% 81%, rgba(238,241,228,0.22) 0, transparent 60%),
+    radial-gradient(1px 1px at 91% 58%, rgba(238,241,228,0.25) 0, transparent 60%),
+    radial-gradient(1px 1px at 24% 91%, rgba(238,241,228,0.2) 0, transparent 60%);
+  background-size: 100% 100%;
+  mix-blend-mode: screen;
+}
+#app::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 1;
+  box-shadow: inset 0 0 160px rgba(0,0,0,0.55), inset 0 0 40px rgba(0,0,0,0.35);
+}
+
+/* Hand-drawn double-line chalk frame around the whole board */
+.frame {
+  position: absolute;
+  inset: 14px;
+  border: 2px solid rgba(238,241,228,0.16);
+  outline: 1px solid rgba(238,241,228,0.07);
+  outline-offset: 5px;
+  pointer-events: none;
+  z-index: 9;
+}
+
+/* ── LOADING ───────────────────────────────────────────────── */
+.loading {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background: var(--board);
+  z-index: 20;
+  gap: 18px;
+}
+.chalk-stick {
+  width: 46px; height: 14px;
+  border-radius: 7px;
+  background: linear-gradient(180deg, #fff6e0, var(--yellow));
+  box-shadow: 0 2px 8px rgba(0,0,0,0.4);
+  animation: chalkspin 1s ease-in-out infinite;
+}
+@keyframes chalkspin {
+  0%, 100% { transform: rotate(-8deg) translateX(0); }
+  50% { transform: rotate(8deg) translateX(4px); }
+}
+.loading-label {
+  font-family: var(--script);
+  font-size: 19px;
+  color: var(--chalk-dim);
+  letter-spacing: 0.01em;
+}
+
+/* ── TOP MASTHEAD ─────────────────────────────────────────── */
+.hud { position: absolute; pointer-events: none; z-index: 10; }
+.masthead {
+  top: 26px; left: 30px; right: 30px;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 24px;
+}
+
+.title-block { pointer-events: auto; max-width: 430px; }
+
+.eyebrow-note {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-family: var(--hand);
+  font-size: 13px;
+  color: var(--chalk-faint);
+  letter-spacing: 0.02em;
+  margin-bottom: 6px;
+  padding-bottom: 2px;
+  border-bottom: 2px dashed rgba(124,138,120,0.4);
+}
+.eyebrow-note .pip {
+  width: 6px; height: 6px;
+  border-radius: 50%;
+  background: var(--pink);
+  box-shadow: 0 0 6px rgba(226,163,171,0.6);
+  animation: pulse-pip 2.4s ease-in-out infinite;
+}
+@keyframes pulse-pip {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.35; transform: scale(0.65); }
+}
+
+h1 { font-family: var(--script); font-weight: 700; font-size: 44px; letter-spacing: 0.005em; color: var(--chalk); line-height: 1; margin-bottom: 8px; text-shadow: 0 0 14px rgba(238,241,228,0.12); }
+h1 .accent { color: var(--yellow); }
+h1 .dim { color: var(--chalk-faint); font-size: 22px; font-weight: 500; }
+h1 .wordmark-link { color: inherit; text-decoration: none; transition: opacity 0.15s ease; }
+h1 .wordmark-link:hover { opacity: 0.82; }
+
+.subtitle {
+  font-family: var(--hand);
+  font-size: 15px;
+  color: var(--chalk-dim);
+  line-height: 1.5;
+  max-width: 410px;
+}
+
+/* ── DATA PLATE (top-right, taped index card) ────────────── */
+.plate {
+  pointer-events: auto;
+  flex-shrink: 0;
+  background: var(--paper);
+  color: #2a2218;
+  border-radius: 2px;
+  padding: 14px 16px 12px;
+  min-width: 168px;
+  transform: rotate(2deg);
+  box-shadow: 0 8px 18px rgba(0,0,0,0.4), 0 1px 0 rgba(255,255,255,0.4) inset;
+  position: relative;
+  transition: transform 0.3s ease, padding 0.3s ease, width 0.3s ease, border-radius 0.3s ease;
+}
+.plate::before {
+  content: '';
+  position: absolute;
+  top: -10px; left: 50%;
+  transform: translateX(-50%) rotate(-3deg);
+  width: 64px; height: 20px;
+  background: var(--tape);
+  opacity: 0.85;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.25);
+  transition: opacity 0.2s ease;
+}
+.plate-header {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin-bottom: 8px;
+  padding-bottom: 6px;
+  border-bottom: 1.5px dashed var(--paper-line);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  user-select: none;
+}
+.plate.collapsed .plate-header {
+  margin-bottom: 0;
+  padding-bottom: 0;
+  border-bottom: none;
+}
+.plate-header-label {
+  font-family: var(--script);
+  font-weight: 700;
+  font-size: 16px;
+  color: #6b4a2f;
+  flex: 1;
+}
+.live-dot {
+  width: 6px; height: 6px;
+  border-radius: 50%;
+  background: #b3433a;
+  animation: pulse-pip 1.6s ease-in-out infinite;
+}
+.plate-min-btn {
+  width: 22px; height: 22px;
+  flex-shrink: 0;
+  border: 1.5px solid var(--paper-line);
+  border-radius: 50%;
+  background: rgba(0,0,0,0.04);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #6b4a2f;
+  font-family: var(--mono);
+  font-size: 13px;
+  line-height: 1;
+  cursor: pointer;
+  transition: transform 0.18s ease, background 0.18s ease;
+}
+.plate-min-btn:active { transform: scale(0.88); background: rgba(0,0,0,0.1); }
+.plate-min-btn svg { width: 10px; height: 10px; display: block; }
+.plate-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  overflow: hidden;
+  max-height: 200px;
+  opacity: 1;
+  transition: max-height 0.28s ease, opacity 0.2s ease, margin-top 0.28s ease;
+}
+.plate.collapsed .plate-rows {
+  max-height: 0;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.p-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 14px;
+}
+.p-label {
+  font-family: var(--mono);
+  font-size: 10px;
+  color: #8a7256;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+}
+.p-val {
+  font-family: var(--mono);
+  font-size: 12px;
+  font-weight: 700;
+  color: #2a2218;
+  white-space: nowrap;
+}
+.p-val.amber { color: #b3433a; }
+.p-val.violet { color: #5b5390; }
+.p-val.ghost { color: #9a8a6e; }
+
+/* ── LEFT FLIP-CHART TABS (mode switcher) ────────────────── */
+.tabrail {
+  position: absolute;
+  left: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  pointer-events: auto;
+}
+.mode-btn {
+  background: var(--board-2);
+  border: 1.5px solid rgba(238,241,228,0.18);
+  border-left: none;
+  color: var(--chalk-faint);
+  font-family: var(--hand);
+  font-size: 14px;
+  letter-spacing: 0.01em;
+  padding: 10px 16px 10px 14px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  border-radius: 0 8px 8px 0;
+  transform: translateX(-14px);
+  transition: transform 0.22s ease, color 0.18s, background 0.18s, border-color 0.18s;
+  white-space: nowrap;
+  box-shadow: 2px 3px 8px rgba(0,0,0,0.25);
+}
+.mode-btn .num {
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--chalk-faint);
+  letter-spacing: 0.04em;
+  transition: color 0.18s;
+}
+.mode-btn:hover { transform: translateX(-4px); color: var(--chalk); }
+.mode-btn.active {
+  transform: translateX(6px);
+  color: var(--board);
+  background: var(--yellow);
+  border-color: var(--yellow);
+  font-weight: 700;
+}
+.mode-btn.active .num { color: rgba(28,42,33,0.55); }
+
+/* ── RIGHT COLUMN (readings plate stacked above the legend note) ── */
+.side-stack {
+  pointer-events: none;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 22px;
+}
+.side-stack > * { pointer-events: auto; }
+
+/* ── PINNED NOTE (legend, sticky/torn paper) ─────────────── */
+.note {
+  width: 168px;
+  pointer-events: none;
+  z-index: 8;
+  background: var(--paper);
+  color: #2a2218;
+  padding: 14px 14px 12px;
+  transform: rotate(-2.5deg);
+  box-shadow: 0 10px 20px rgba(0,0,0,0.4);
+  clip-path: polygon(0% 2%, 6% 0%, 18% 1%, 30% 0%, 44% 1.5%, 58% 0%, 72% 1%, 86% 0%, 100% 2%, 100% 100%, 0% 100%);
+}
+.note::before {
+  content: '';
+  position: absolute;
+  top: -9px; right: 18px;
+  transform: rotate(5deg);
+  width: 46px; height: 18px;
+  background: var(--tape);
+  opacity: 0.85;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.25);
+}
+.legend-title {
+  font-family: var(--script);
+  font-weight: 700;
+  font-size: 18px;
+  color: #6b4a2f;
+  margin-bottom: 8px;
+}
+.legend-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-family: var(--hand);
+  font-size: 12.5px;
+  color: #4a3c28;
+  padding: 2px 0;
+}
+.l-swatch {
+  width: 9px; height: 9px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  box-shadow: 0 0 0 1px rgba(0,0,0,0.15);
+}
+
+/* ── BOTTOM CHALK TRAY ────────────────────────────────────── */
+.tray {
+  position: absolute;
+  left: 30px;
+  right: 30px;
+  bottom: 26px;
+  z-index: 10;
+  display: flex;
+  align-items: flex-end;
+  gap: 14px;
+  flex-wrap: wrap;
+  pointer-events: none;
+}
+.tray > * { pointer-events: auto; }
+
+/* ruler / slider */
+.ruler {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 320px;
+  min-width: 260px;
+  background: var(--board-2);
+  border: 1.5px solid rgba(238,241,228,0.16);
+  border-radius: 8px;
+  padding: 10px 16px;
+  box-shadow: 0 4px 14px rgba(0,0,0,0.3);
+}
+.ruler-top {
+  display: flex;
+  width: 100%;
+  flex-shrink: 0;
+  justify-content: space-between;
+  align-items: baseline;
+  margin-bottom: 8px;
+}
+.ruler-label {
+  font-family: var(--hand);
+  font-size: 13.5px;
+  color: var(--chalk-dim);
+}
+.ruler-val {
+  font-family: var(--mono);
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--yellow);
+}
+.ruler-track {
+  position: relative;
+  width: 100%;
+  height: 22px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+}
+.ruler-track::before {
+  content: '';
+  position: absolute;
+  left: 0; right: 0; top: 0; bottom: 0;
+  background-image: repeating-linear-gradient(90deg, rgba(238,241,228,0.35) 0, rgba(238,241,228,0.35) 1px, transparent 1px, transparent 9%);
+  background-position: center;
+  opacity: 0.5;
+  pointer-events: none;
+}
+input[type=range] {
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  -webkit-appearance: none;
+  height: 2px;
+  background: rgba(238,241,228,0.3);
+  outline: none;
+  border-radius: 1px;
+}
+input[type=range]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 26px; height: 11px;
+  border-radius: 5px;
+  background: linear-gradient(180deg, #fff8e8, var(--yellow));
+  border: 1px solid rgba(0,0,0,0.2);
+  cursor: pointer;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.45);
+  transition: transform 0.1s;
+}
+input[type=range]:active::-webkit-slider-thumb { transform: scaleY(1.3); }
+
+/* equation card — torn notebook page */
+.eq-card {
+  flex: 0 1 300px;
+  width: 300px;
+  max-width: 100%;
+  background: var(--paper);
+  color: #2a2218;
+  padding: 16px 18px 16px 26px;
+  position: relative;
+  box-shadow: 0 8px 20px rgba(0,0,0,0.35);
+  clip-path: polygon(0% 0%, 100% 1.5%, 99% 14%, 100% 27%, 99% 41%, 100% 55%, 99% 68%, 100% 82%, 99% 100%, 0% 100%);
+}
+.eq-card::before {
+  content: '';
+  position: absolute;
+  left: 14px; top: 0; bottom: 0;
+  width: 1.5px;
+  background: var(--paper-line);
+  opacity: 0.6;
+}
+.eq-tag {
+  font-family: var(--hand);
+  font-size: 11.5px;
+  color: #8a7256;
+  letter-spacing: 0.02em;
+  margin-bottom: 6px;
+  text-transform: uppercase;
+}
+.eq-main {
+  font-family: var(--mono);
+  font-size: 19px;
+  font-weight: 700;
+  color: #8a2f2a;
+  margin-bottom: 10px;
+  letter-spacing: 0.01em;
+  line-height: 1.25;
+}
+.eq-desc {
+  font-family: var(--hand);
+  font-size: 13.5px;
+  line-height: 1.5;
+  color: #4a3c28;
+}
+
+/* Wraps the bottom tray + mode tabs so they can be laid out as a single
+   stacked unit on phones. On larger screens it's invisible to layout
+   (children behave exactly as if they were direct children of #app). */
+.bottom-stack { display: contents; }
+
+/* ── RESPONSIVE ───────────────────────────────────────────── */
+@media (max-width: 1180px) {
+  .tray { justify-content: flex-start; }
+  .eq-card { flex-basis: 100%; width: 100%; order: -1; }
+}
+@media (max-height: 560px) {
+  .note { display: none; }
+}
+@media (max-height: 460px) {
+  .eq-card { display: none; }
+  .masthead { top: 14px; }
+  h1 { font-size: 28px; margin-bottom: 2px; }
+  .subtitle { display: none; }
+  .tray { bottom: 12px; gap: 8px; }
+}
+@media (min-width: 901px) and (max-width: 1180px) {
+  .mode-btn { font-size: 13px; padding: 9px 14px 9px 12px; }
+}
+@media (min-width: 641px) and (max-width: 900px) {
+  .eq-card { flex-basis: 100%; width: 100%; order: -1; max-width: 420px; }
+}
+
+/* Phones */
+@media (max-width: 640px) {
+  .masthead { top: 16px; left: 16px; right: 16px; flex-direction: column; gap: 22px; }
+  h1 { font-size: 30px; }
+  h1 .dim { display: block; font-size: 16px; margin-top: 2px; }
+  .subtitle { max-width: none; font-size: 13px; }
+  .note { display: none; }
+  .side-stack { width: 100%; align-items: stretch; }
+  .plate { transform: rotate(1deg); width: 100%; min-width: 0; }
+  .plate-rows { gap: 7px; }
+  .p-row { gap: 10px; }
+  .eq-card { display: none; }
+
+  /* Tray (ruler) and tabrail (mode tabs) become a real stacked flex
+     column anchored to the bottom of the screen. Since each sits in
+     normal flow above the other, their heights can never overlap —
+     no matter how the mode-btn labels wrap on a given device. */
+  .bottom-stack {
+    display: flex;
+    flex-direction: column;
+    position: absolute;
+    left: 0; right: 0; bottom: 0;
+    z-index: 10;
+    pointer-events: none;
+  }
+  .bottom-stack > * { pointer-events: auto; }
+
+  .tray {
+    display: block;
+    position: static;
+    left: auto; right: auto; bottom: auto;
+    margin: 0 16px 10px;
+  }
+  .ruler { width: 100%; min-width: 0; flex-basis: auto; }
+  .ruler-top { margin-bottom: 12px; }
+
+  .tabrail {
+    position: static;
+    left: auto; right: auto; top: auto; bottom: auto; transform: none;
+    flex-direction: row; flex-wrap: wrap; gap: 0;
+    background: var(--board-2);
+    border-top: 1.5px solid rgba(238,241,228,0.18);
+    /* keep tabs clear of Android/iOS gesture bars */
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+  .mode-btn {
+    flex: 1 1 50%;
+    flex-direction: column;
+    min-height: 50px;
+    border-radius: 0;
+    transform: none !important;
+    border: none;
+    border-right: 1px solid rgba(238,241,228,0.12);
+    border-bottom: 1px solid rgba(238,241,228,0.12);
+    justify-content: center;
+    align-items: center;
+    gap: 3px;
+    padding: 8px 6px;
+    font-size: 11.5px;
+    line-height: 1.15;
+    text-align: center;
+    white-space: normal;
+    box-shadow: none;
+  }
+  .mode-btn .num { font-size: 9.5px; }
+  .frame { inset: 8px; }
+}
+
+/* Collapsed readings card = a slim tab docked to the right screen edge,
+   lifted out of document flow entirely. Keeps the board's center clear
+   instead of leaving a bar sitting across the middle of the screen. */
+@media (max-width: 640px) {
+  .plate.collapsed {
+    position: fixed;
+    top: 50%;
+    right: 0;
+    left: auto;
+    transform: translateY(-50%);
+    width: auto;
+    min-width: 0;
+    padding: 10px 10px 10px 14px;
+    border-radius: 10px 0 0 10px;
+    box-shadow: -4px 4px 14px rgba(0,0,0,0.4), 0 1px 0 rgba(255,255,255,0.4) inset;
+    z-index: 15;
+  }
+  .plate.collapsed::before { opacity: 0; }
+  .plate.collapsed .plate-header { margin: 0; padding: 0; border: none; gap: 6px; }
+  .plate.collapsed .plate-header-label {
+    writing-mode: vertical-rl;
+    text-orientation: mixed;
+    font-size: 14px;
+    letter-spacing: 0.02em;
+  }
+  .plate.collapsed .plate-rows { display: none; }
+  .plate.collapsed .live-dot { display: none; }
+}
+</style>
+
+</head>
+<body>
+<div id="app">
+  <div class="loading" id="loading">
+    <div class="chalk-stick"></div>
+    <div class="loading-label">chalking up the geometry…</div>
+  </div>
+
+  <div class="frame"></div>
+
+  <!-- Top masthead -->
+  <div class="hud masthead">
+    <div class="title-block">
+      <div class="eyebrow-note"><span class="pip"></span>Lecture note &nbsp;·&nbsp; v &gt; c, no real rest frame</div>
+      <h1><a class="wordmark-link" href="index.html" aria-label="Back to the Tachyon landing page">Tachy<span class="accent">ω</span>n</a> <span class="dim">— shape from equation</span></h1>
+      <div class="subtitle" id="subtitle">The energy–momentum hyperboloid. Every point on this surface is a kinematically allowed (E, p) state for a particle with imaginary rest mass.</div>
+    </div>
+
+    <div class="side-stack">
+      <div class="plate" id="plate">
+        <div class="plate-header" id="plate-header">
+          <span class="plate-header-label">readings</span>
+          <div class="live-dot"></div>
+          <div class="plate-min-btn" id="plate-min-btn" role="button" aria-label="Minimize readings card" aria-expanded="true">
+            <svg viewBox="0 0 10 10" fill="none"><path d="M1.5 2.5H8.5M1.5 5H8.5M1.5 7.5H8.5" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg>
+          </div>
+        </div>
+        <div class="plate-rows">
+          <div class="p-row">
+            <span class="p-label">m²</span>
+            <span class="p-val" id="r-mass">−1.00</span>
+          </div>
+          <div class="p-row">
+            <span class="p-label">E / mc²</span>
+            <span class="p-val amber" id="r-e">—</span>
+          </div>
+          <div class="p-row">
+            <span class="p-label">v / c</span>
+            <span class="p-val" id="r-v">—</span>
+          </div>
+          <div class="p-row">
+            <span class="p-label">fps</span>
+            <span class="p-val ghost" id="r-fps">60</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Legend: pinned note -->
+      <div class="note" id="legend">
+        <div class="legend-title">key</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Bottom controls: ruler/equation tray + mode tabs, stacked as one
+       unit on phones so they can never overlap each other. -->
+  <div class="bottom-stack">
+    <!-- Bottom chalk tray: ruler slider + equation card -->
+    <div class="tray">
+      <div class="ruler" id="scrub-wrap">
+        <div class="ruler-top">
+          <span class="ruler-label" id="scrub-label">m² — tachyonic mass²</span>
+          <span class="ruler-val" id="scrub-val">−1.00</span>
+        </div>
+        <div class="ruler-track">
+          <input type="range" id="scrub" min="-3" max="-0.1" step="0.05" value="-1">
+        </div>
+      </div>
+
+      <div class="eq-card" id="eq-panel">
+        <div class="eq-tag">governing relation</div>
+        <div class="eq-main" id="eq-main">E² = p²c² − m²c⁴</div>
+        <div class="eq-desc" id="eq-desc">Ordinary particles trace E² = p²c² + m²c⁴, a hyperboloid of two sheets inside the light cone. Flip the sign on m² and the surface inverts — opening into a single connected sheet that never closes near p = 0. There is no rest frame: E ≥ |p|c everywhere on it.</div>
+      </div>
+    </div>
+
+    <!-- Mode switcher: flip-chart tabs -->
+    <div class="tabrail">
+      <button class="mode-btn active" data-mode="0"><span class="num">01</span>Energy–momentum</button>
+      <button class="mode-btn" data-mode="1"><span class="num">02</span>Light cone</button>
+      <button class="mode-btn" data-mode="2"><span class="num">03</span>Imaginary mass</button>
+      <button class="mode-btn" data-mode="3"><span class="num">04</span>Cherenkov</button>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+(function(){
+  "use strict";
+
+  const container = document.getElementById('app');
+  const loading = document.getElementById('loading');
+
+  // ---------- readings plate: minimize/maximize ----------
+  // The "readings" card can overlap the title/subtitle on narrow phone
+  // screens, so it gets a tap-to-collapse header (like a notification
+  // shade). State is remembered across visits. On first-ever load on a
+  // narrow screen, it starts collapsed so it never covers the title.
+  (function initPlateToggle(){
+    const plate = document.getElementById('plate');
+    const header = document.getElementById('plate-header');
+    const btn = document.getElementById('plate-min-btn');
+    if(!plate || !header) return;
+
+    const STORAGE_KEY = 'tachyon-plate-collapsed';
+    let stored = null;
+    try { stored = localStorage.getItem(STORAGE_KEY); } catch(e) { /* storage may be unavailable */ }
+
+    const isNarrow = window.matchMedia('(max-width: 640px)').matches;
+    const startCollapsed = stored !== null ? stored === '1' : isNarrow;
+
+    function setCollapsed(collapsed){
+      plate.classList.toggle('collapsed', collapsed);
+      btn.setAttribute('aria-expanded', String(!collapsed));
+      try { localStorage.setItem(STORAGE_KEY, collapsed ? '1' : '0'); } catch(e) { /* ignore */ }
+    }
+    setCollapsed(startCollapsed);
+
+    header.addEventListener('click', (e)=>{
+      e.stopPropagation();
+      setCollapsed(!plate.classList.contains('collapsed'));
+    });
+  })();
+
+  // ---------- renderer / scene / camera ----------
+  const scene = new THREE.Scene();
+  scene.fog = new THREE.FogExp2(0x16221b, 0.018);
+
+  const camera = new THREE.PerspectiveCamera(42, window.innerWidth/window.innerHeight, 0.1, 1000);
+  camera.position.set(7.5, 5.5, 9.5);
+
+  // Adaptive pixel ratio — high-DPI desktop monitors (4K/5K/Retina) push far more
+  // fragment-shader work than the GPU needs for a UI like this. Cap harder on
+  // desktop, where large framebuffers are the main cause of lag.
+  function getPixelRatio(){
+    const dpr = window.devicePixelRatio || 1;
+    const isDesktop = window.innerWidth > 900;
+    return Math.min(dpr, isDesktop ? 1.5 : 2);
+  }
+  const initialDpr = getPixelRatio();
+
+  const renderer = new THREE.WebGLRenderer({
+    antialias: initialDpr < 1.5,   // MSAA is redundant once we're supersampling via pixel ratio
+    alpha: false,
+    powerPreference: 'high-performance', // avoid falling back to integrated GPU on laptops
+    stencil: false
+  });
+  renderer.setPixelRatio(initialDpr);
+  renderer.setSize(window.innerWidth, window.innerHeight);
+  renderer.setClearColor(0x1c2a21, 1);
+  container.appendChild(renderer.domElement);
+
+  // ---------- lighting ----------
+  const hemi = new THREE.HemisphereLight(0x3a5066, 0x05060a, 0.9);
+  scene.add(hemi);
+  const key = new THREE.PointLight(0x5ad8e6, 1.4, 60);
+  key.position.set(8, 10, 6);
+  scene.add(key);
+  const rim = new THREE.PointLight(0xe8a23d, 0.9, 60);
+  rim.position.set(-8, -4, -6);
+  scene.add(rim);
+  const fill = new THREE.PointLight(0x9a7fe0, 0.5, 60);
+  fill.position.set(0, -8, 8);
+  scene.add(fill);
+
+  // ---------- orbit controls (manual, no external dep) ----------
+  // The visible structure spans roughly ±5.3 units. The old fixed distance (13.5)
+  // left almost no margin on screen — especially in portrait, where horizontal
+  // FOV is much narrower than vertical FOV — which is why everything read as
+  // "zoomed in". Compute a distance that comfortably fits the object instead.
+  function computeInitialDist(){
+    const halfObjSize = 6.6; // object half-extent + margin
+    const vFovHalf = (42 * Math.PI/180) / 2;
+    const aspect = window.innerWidth / window.innerHeight;
+    const distForHeight = halfObjSize / Math.tan(vFovHalf);
+    const distForWidth = halfObjSize / (Math.tan(vFovHalf) * aspect);
+    return Math.max(distForHeight, distForWidth) * 0.82; // 0.82 = comfortable, not maximal, fit
+  }
+  let camTheta = 0.78, camPhi = 1.05, camDist = computeInitialDist();
+  let targetTheta = camTheta, targetPhi = camPhi, targetDist = camDist;
+  let dragging = false, lastX = 0, lastY = 0;
+  let autoRotate = true;
+
+  function updateCamera(){
+    camTheta += (targetTheta - camTheta) * 0.08;
+    camPhi += (targetPhi - camPhi) * 0.08;
+    camDist += (targetDist - camDist) * 0.08;
+    const p = Math.max(0.15, Math.min(Math.PI - 0.15, camPhi));
+    camera.position.set(
+      camDist * Math.sin(p) * Math.sin(camTheta),
+      camDist * Math.cos(p),
+      camDist * Math.sin(p) * Math.cos(camTheta)
+    );
+    camera.lookAt(0,0,0);
+  }
+
+  renderer.domElement.addEventListener('pointerdown', (e)=>{
+    dragging = true; lastX = e.clientX; lastY = e.clientY; autoRotate = false;
+  });
+  window.addEventListener('pointerup', ()=> dragging = false);
+  window.addEventListener('pointermove', (e)=>{
+    if(!dragging) return;
+    const dx = e.clientX - lastX, dy = e.clientY - lastY;
+    lastX = e.clientX; lastY = e.clientY;
+    targetTheta -= dx * 0.006;
+    targetPhi -= dy * 0.006;
+  });
+  renderer.domElement.addEventListener('wheel', (e)=>{
+    e.preventDefault();
+    targetDist += e.deltaY * 0.01;
+    targetDist = Math.max(6, Math.min(40, targetDist));
+  }, {passive:false});
+
+  let pinchStart = null;
+  renderer.domElement.addEventListener('touchstart', (e)=>{
+    autoRotate = false;
+    if(e.touches.length===2){
+      dragging = false;
+      const dx = e.touches[0].clientX - e.touches[1].clientX;
+      const dy = e.touches[0].clientY - e.touches[1].clientY;
+      pinchStart = Math.hypot(dx,dy);
+    }
+  }, {passive:true});
+  renderer.domElement.addEventListener('touchmove', (e)=>{
+    if(e.touches.length===2 && pinchStart!==null){
+      e.preventDefault();
+      dragging = false;
+      const dx = e.touches[0].clientX - e.touches[1].clientX;
+      const dy = e.touches[0].clientY - e.touches[1].clientY;
+      const d = Math.hypot(dx,dy);
+      targetDist += (pinchStart - d) * 0.02;
+      targetDist = Math.max(6, Math.min(40, targetDist));
+      pinchStart = d;
+    }
+  }, {passive:false});
+  renderer.domElement.addEventListener('touchend', (e)=>{
+    if(e.touches.length<2) pinchStart = null;
+  }, {passive:true});
+
+  // ---------- ground grid ----------
+  const gridGroup = new THREE.Group();
+  const gridMat = new THREE.LineBasicMaterial({color:0x3d4f3f, transparent:true, opacity:0.45});
+  const gridSize = 16, gridDiv = 16;
+  for(let i=-gridDiv; i<=gridDiv; i++){
+    const t = i/gridDiv * gridSize;
+    const g1 = new THREE.BufferGeometry().setFromPoints([
+      new THREE.Vector3(t, -6, -gridSize), new THREE.Vector3(t, -6, gridSize)
+    ]);
+    gridGroup.add(new THREE.Line(g1, gridMat));
+    const g2 = new THREE.BufferGeometry().setFromPoints([
+      new THREE.Vector3(-gridSize, -6, t), new THREE.Vector3(gridSize, -6, t)
+    ]);
+    gridGroup.add(new THREE.Line(g2, gridMat));
+  }
+  scene.add(gridGroup);
+
+  // axes
+  const axisMat = new THREE.LineBasicMaterial({color:0x6b7d68, transparent:true, opacity:0.6});
+  function addAxis(p1, p2){
+    const g = new THREE.BufferGeometry().setFromPoints([p1,p2]);
+    scene.add(new THREE.Line(g, axisMat));
+  }
+  addAxis(new THREE.Vector3(0,-6,0), new THREE.Vector3(0,6.5,0));
+  addAxis(new THREE.Vector3(-7,0,0), new THREE.Vector3(7,0,0));
+  addAxis(new THREE.Vector3(0,0,-7), new THREE.Vector3(0,0,7));
+
+  function makeAxisLabel(text, pos, color){
+    const canvas = document.createElement('canvas');
+    canvas.width = 128; canvas.height = 64;
+    const ctx = canvas.getContext('2d');
+    ctx.font = 'italic 34px Georgia';
+    ctx.fillStyle = color;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(text, 64, 34);
+    const tex = new THREE.CanvasTexture(canvas);
+    const mat = new THREE.SpriteMaterial({map:tex, transparent:true, depthTest:false});
+    const sprite = new THREE.Sprite(mat);
+    sprite.scale.set(1.4, 0.7, 1);
+    sprite.position.copy(pos);
+    scene.add(sprite);
+  }
+  makeAxisLabel('E', new THREE.Vector3(0,6.9,0), '#e8a23d');
+  makeAxisLabel('pₓ', new THREE.Vector3(7.5,0,0), '#5ad8e6');
+  makeAxisLabel('p_y', new THREE.Vector3(0,0,7.5), '#9a7fe0');
+
+  // ---------- groups for each mode ----------
+  const modeGroups = [new THREE.Group(), new THREE.Group(), new THREE.Group(), new THREE.Group()];
+  modeGroups.forEach(g=> scene.add(g));
+
+  let m2 = -1.0;
+
+  // ===== MODE 0: energy-momentum hyperboloid =====
+  let hyperGroup0 = null;
+  function buildHyperboloid(){
+    if(hyperGroup0){ modeGroups[0].remove(hyperGroup0); hyperGroup0.traverse(o=>{ if(o.geometry) o.geometry.dispose(); if(o.material) o.material.dispose(); }); }
+    hyperGroup0 = new THREE.Group();
+
+    const absm = Math.sqrt(-m2);
+    const segU = 56, segV = 32;
+    const pMax = 5.2;
+    const colorIn = new THREE.Color(0x5ad8e6);
+    const colorOut = new THREE.Color(0xe8a23d);
+
+    function buildSheet(sign, group){
+      const verts = [];
+      for(let i=0; i<=segU; i++){
+        const t = i/segU;
+        const pr = absm + t*(pMax-absm);
+        const E = sign*Math.sqrt(Math.max(pr*pr - absm*absm, 0));
+        for(let j=0; j<=segV; j++){
+          const ang = j/segV * Math.PI*2;
+          const x = pr*Math.cos(ang);
+          const z = pr*Math.sin(ang);
+          verts.push(x, E, z);
+        }
+      }
+      const geo = new THREE.BufferGeometry();
+      const idx = [];
+      for(let i=0; i<segU; i++){
+        for(let j=0; j<segV; j++){
+          const a = i*(segV+1)+j;
+          const b = a+segV+1;
+          const c = a+1;
+          const d = b+1;
+          idx.push(a,b,c, b,d,c);
+        }
+      }
+      geo.setIndex(idx);
+      geo.setAttribute('position', new THREE.Float32BufferAttribute(verts, 3));
+      geo.computeVertexNormals();
+
+      const mat = new THREE.MeshStandardMaterial({
+        color: sign>0 ? 0x5ad8e6 : 0xe8a23d,
+        metalness:0.15,
+        roughness:0.32,
+        transparent:true,
+        opacity:0.72,
+        side:THREE.DoubleSide,
+        emissive: sign>0 ? 0x123338 : 0x3a2410,
+        emissiveIntensity:0.25
+      });
+      const mesh = new THREE.Mesh(geo, mat);
+      group.add(mesh);
+
+      const wireGeo = new THREE.WireframeGeometry(geo);
+      const wireMat = new THREE.LineBasicMaterial({color: sign>0?0x9ee9f0:0xf0c98a, transparent:true, opacity:0.18});
+      group.add(new THREE.LineSegments(wireGeo, wireMat));
+    }
+    buildSheet(1, hyperGroup0);
+    buildSheet(-1, hyperGroup0);
+
+    const ringGeo = new THREE.TorusGeometry(absm, 0.02, 8, 56);
+    const ringMat = new THREE.MeshBasicMaterial({color:0xffffff, transparent:true, opacity:0.55});
+    const ring = new THREE.Mesh(ringGeo, ringMat);
+    ring.rotation.x = Math.PI/2;
+    hyperGroup0.add(ring);
+
+    modeGroups[0].add(hyperGroup0);
+  }
+  buildHyperboloid();
+
+  // ===== MODE 1: light cone + tachyon worldline =====
+  const lightConeGroup = new THREE.Group();
+  {
+    const coneHeight = 6;
+    const coneRadius = 6;
+    const segments = 40;
+
+    function makeCone(yDir){
+      const geo = new THREE.ConeGeometry(coneRadius, coneHeight, segments, 1, true);
+      const mat = new THREE.MeshStandardMaterial({
+        color:0x5ad8e6,
+        transparent:true,
+        opacity:0.16,
+        side:THREE.DoubleSide,
+        roughness:0.4,
+        metalness:0.1,
+        emissive:0x123338,
+        emissiveIntensity:0.2
+      });
+      const mesh = new THREE.Mesh(geo, mat);
+      mesh.position.y = yDir * coneHeight/2;
+      if(yDir<0) mesh.rotation.x = Math.PI;
+      const wireGeo = new THREE.WireframeGeometry(geo);
+      const wireMat = new THREE.LineBasicMaterial({color:0x9ee9f0, transparent:true, opacity:0.3});
+      const wire = new THREE.LineSegments(wireGeo, wireMat);
+      wire.position.copy(mesh.position);
+      wire.rotation.copy(mesh.rotation);
+      lightConeGroup.add(mesh);
+      lightConeGroup.add(wire);
+    }
+    makeCone(1);
+    makeCone(-1);
+
+    const lineGeoPts = [];
+    const steps = 80;
+    for(let i=-steps; i<=steps; i++){
+      const t = i/steps * coneHeight*0.95;
+      const v = 1.6;
+      const radial = Math.abs(v*t* (coneRadius/coneHeight) * 0.62);
+      const ang = t*0.9;
+      lineGeoPts.push(new THREE.Vector3(radial*Math.cos(ang), t, radial*Math.sin(ang)));
+    }
+    const tlGeo = new THREE.BufferGeometry().setFromPoints(lineGeoPts);
+    const tlMat = new THREE.LineBasicMaterial({color:0xe8a23d, linewidth:3});
+    const worldline = new THREE.Line(tlGeo, tlMat);
+    lightConeGroup.add(worldline);
+
+    const markerGeo = new THREE.SphereGeometry(0.13, 16, 16);
+    const markerMat = new THREE.MeshBasicMaterial({color:0xffd28a});
+    const marker = new THREE.Mesh(markerGeo, markerMat);
+    lightConeGroup.add(marker);
+    lightConeGroup.userData.marker = marker;
+    lightConeGroup.userData.path = lineGeoPts;
+
+    const glowCanvas = document.createElement('canvas');
+    glowCanvas.width = 128; glowCanvas.height = 128;
+    const gctx = glowCanvas.getContext('2d');
+    const grad = gctx.createRadialGradient(64,64,0,64,64,64);
+    grad.addColorStop(0, 'rgba(255,210,140,0.9)');
+    grad.addColorStop(1, 'rgba(255,210,140,0)');
+    gctx.fillStyle = grad;
+    gctx.fillRect(0,0,128,128);
+    const glowTex = new THREE.CanvasTexture(glowCanvas);
+    const glowMat = new THREE.SpriteMaterial({map:glowTex, transparent:true, depthWrite:false});
+    const glowSprite = new THREE.Sprite(glowMat);
+    glowSprite.scale.set(1.4,1.4,1);
+    lightConeGroup.add(glowSprite);
+    lightConeGroup.userData.glow = glowSprite;
+
+    const planeGeo = new THREE.CircleGeometry(coneRadius, 40);
+    const planeMat = new THREE.MeshBasicMaterial({color:0x3a4458, transparent:true, opacity:0.06, side:THREE.DoubleSide});
+    const plane = new THREE.Mesh(planeGeo, planeMat);
+    plane.rotation.x = Math.PI/2;
+    lightConeGroup.add(plane);
+  }
+  modeGroups[1].add(lightConeGroup);
+
+  // ===== MODE 2: imaginary mass shell =====
+  let shellGroup2 = null;
+  function buildImaginaryShell(){
+    if(shellGroup2){ modeGroups[2].remove(shellGroup2); shellGroup2.traverse(o=>{ if(o.geometry) o.geometry.dispose(); if(o.material) o.material.dispose(); }); }
+    shellGroup2 = new THREE.Group();
+    const mu = Math.sqrt(-m2);
+    const segU = 64, segV = 36;
+    const pMax = 5.2;
+
+    const verts = [];
+    const colorsArr = [];
+    const cReal = new THREE.Color(0x5ad8e6);
+    const cImag = new THREE.Color(0x9a7fe0);
+
+    for(let i=0; i<=segU; i++){
+      const t = i/segU;
+      const pr = t*pMax;
+      let y, isImag;
+      if(pr >= mu){
+        y = Math.sqrt(pr*pr - mu*mu);
+        isImag = false;
+      } else {
+        y = 0;
+        isImag = true;
+      }
+      const imagMag = isImag ? Math.sqrt(mu*mu - pr*pr) : 0;
+      for(let j=0; j<=segV; j++){
+        const ang = j/segV*Math.PI*2;
+        let x = pr*Math.cos(ang);
+        let z = pr*Math.sin(ang);
+        let yy = y;
+        if(isImag){ yy = -imagMag*0.9; }
+        verts.push(x, yy, z);
+        const c = isImag ? cImag : cReal;
+        colorsArr.push(c.r, c.g, c.b);
+      }
+    }
+    const idx = [];
+    for(let i=0; i<segU; i++){
+      for(let j=0; j<segV; j++){
+        const a = i*(segV+1)+j;
+        const b = a+segV+1;
+        const c = a+1;
+        const d = b+1;
+        idx.push(a,b,c, b,d,c);
+      }
+    }
+    const geo = new THREE.BufferGeometry();
+    geo.setIndex(idx);
+    geo.setAttribute('position', new THREE.Float32BufferAttribute(verts, 3));
+    geo.setAttribute('color', new THREE.Float32BufferAttribute(colorsArr, 3));
+    geo.computeVertexNormals();
+
+    const mat = new THREE.MeshStandardMaterial({
+      vertexColors:true,
+      metalness:0.2,
+      roughness:0.3,
+      transparent:true,
+      opacity:0.82,
+      side:THREE.DoubleSide
+    });
+    const mesh = new THREE.Mesh(geo, mat);
+    shellGroup2.add(mesh);
+
+    const wireGeo = new THREE.WireframeGeometry(geo);
+    const wireMat = new THREE.LineBasicMaterial({color:0xb8c4d6, transparent:true, opacity:0.12});
+    shellGroup2.add(new THREE.LineSegments(wireGeo, wireMat));
+
+    const ringGeo = new THREE.TorusGeometry(mu, 0.02, 8, 56);
+    const ringMat = new THREE.MeshBasicMaterial({color:0xffffff, transparent:true, opacity:0.6});
+    const ring = new THREE.Mesh(ringGeo, ringMat);
+    ring.rotation.x = Math.PI/2;
+    shellGroup2.add(ring);
+
+    const vertsBelow = verts.map((v,idx2)=> (idx2%3===1) ? -v : v);
+    const geo2 = new THREE.BufferGeometry();
+    geo2.setIndex(idx);
+    geo2.setAttribute('position', new THREE.Float32BufferAttribute(vertsBelow,3));
+    geo2.setAttribute('color', new THREE.Float32BufferAttribute(colorsArr,3));
+    geo2.computeVertexNormals();
+    const mesh2 = new THREE.Mesh(geo2, mat.clone());
+    mesh2.material.opacity = 0.5;
+    shellGroup2.add(mesh2);
+
+    modeGroups[2].add(shellGroup2);
+  }
+  buildImaginaryShell();
+
+  // ===== MODE 3: vacuum Cherenkov radiation =====
+  let cherenkovGroup3 = null;
+  let cherenkovPhotons = [];
+  const cherenkovState = { v: 1.6, z: -6.5 };
+  function buildCherenkov(){
+    if(cherenkovGroup3){ modeGroups[3].remove(cherenkovGroup3); cherenkovGroup3.traverse(o=>{ if(o.geometry) o.geometry.dispose(); if(o.material) o.material.dispose(); }); }
+    cherenkovGroup3 = new THREE.Group();
+    cherenkovPhotons = [];
+
+    const trackLen = 13;
+    const trackGeo = new THREE.BufferGeometry().setFromPoints([
+      new THREE.Vector3(0,0,-trackLen/2), new THREE.Vector3(0,0,trackLen/2)
+    ]);
+    const trackMat = new THREE.LineBasicMaterial({color:0x3a4458, transparent:true, opacity:0.5});
+    cherenkovGroup3.add(new THREE.Line(trackGeo, trackMat));
+
+    const headGeo = new THREE.SphereGeometry(0.16, 16, 16);
+    const headMat = new THREE.MeshBasicMaterial({color:0xffd28a});
+    const head = new THREE.Mesh(headGeo, headMat);
+    cherenkovGroup3.add(head);
+    cherenkovGroup3.userData.head = head;
+
+    const glowCanvas = document.createElement('canvas');
+    glowCanvas.width = 128; glowCanvas.height = 128;
+    const gctx = glowCanvas.getContext('2d');
+    const grad = gctx.createRadialGradient(64,64,0,64,64,64);
+    grad.addColorStop(0, 'rgba(255,210,140,0.95)');
+    grad.addColorStop(1, 'rgba(255,210,140,0)');
+    gctx.fillStyle = grad;
+    gctx.fillRect(0,0,128,128);
+    const glowTex = new THREE.CanvasTexture(glowCanvas);
+    const glowMat = new THREE.SpriteMaterial({map:glowTex, transparent:true, depthWrite:false});
+    const headGlow = new THREE.Sprite(glowMat);
+    headGlow.scale.set(1.1,1.1,1);
+    cherenkovGroup3.add(headGlow);
+    cherenkovGroup3.userData.headGlow = headGlow;
+
+    const vOverC = cherenkovState.v;
+    const cosTheta = Math.min(0.97, 1/vOverC);
+    const theta = Math.acos(cosTheta);
+    const coneLen = trackLen*0.9;
+    const coneRadius = coneLen*Math.tan(theta);
+    const coneGeo = new THREE.ConeGeometry(Math.max(0.05,coneRadius), coneLen, 32, 1, true);
+    coneGeo.translate(0,-coneLen/2,0);
+    const coneMat = new THREE.MeshBasicMaterial({color:0x5ad8e6, transparent:true, opacity:0.14, side:THREE.DoubleSide});
+    const cone = new THREE.Mesh(coneGeo, coneMat);
+    cone.rotation.x = -Math.PI/2;
+    cherenkovGroup3.add(cone);
+    cherenkovGroup3.userData.cone = cone;
+
+    const wireGeo = new THREE.WireframeGeometry(coneGeo);
+    const wireMat = new THREE.LineBasicMaterial({color:0x9ee9f0, transparent:true, opacity:0.22});
+    const wire = new THREE.LineSegments(wireGeo, wireMat);
+    wire.rotation.copy(cone.rotation);
+    cherenkovGroup3.add(wire);
+    cherenkovGroup3.userData.wire = wire;
+
+    const photonGeo = new THREE.SphereGeometry(0.045, 8, 8);
+    const photonMat = new THREE.MeshBasicMaterial({color:0xe8a23d});
+    for(let i=0;i<46;i++){
+      const m = new THREE.Mesh(photonGeo, photonMat.clone());
+      cherenkovPhotons.push({ mesh:m, born: Math.random(), ang: Math.random()*Math.PI*2 });
+      cherenkovGroup3.add(m);
+    }
+
+    modeGroups[3].add(cherenkovGroup3);
+  }
+  buildCherenkov();
+
+  // ---------- mode switching ----------
+  let currentMode = 0;
+  modeGroups[0].visible = true;
+  modeGroups[1].visible = false;
+  modeGroups[2].visible = false;
+  modeGroups[3].visible = false;
+
+  const subtitles = [
+    "The energy–momentum hyperboloid. Every point on this surface is a kinematically allowed (E, p) state for a particle with imaginary rest mass.",
+    "The light cone defines causal structure. A tachyon's worldline (amber) runs outside the cone — it connects events no slower-than-light signal could link.",
+    "Setting m² &lt; 0 makes m imaginary. Below the threshold momentum |p|&lt;μ, the energy itself becomes imaginary (violet, dipped) — a region with no real physical interpretation.",
+    "The one interaction a charged tachyon could not avoid: it continuously sheds vacuum Cherenkov photons into a forward shock cone. Losing energy this way makes it accelerate further — a runaway with no terminal speed."
+  ];
+  const eqMain = ["E² = p²c² − m²c⁴", "Δx > cΔt", "m = iμ,  μ ∈ ℝ", "cosθ_c = c / v"];
+  const eqDesc = [
+    "Ordinary particles trace E² = p²c² + m²c⁴, a hyperboloid of two sheets inside the light cone. Flip the sign on m² and the surface inverts into a single sheet with a throat at |p| = √(−m²) — it never closes near p = 0. There is no rest frame anywhere on it.",
+    "Any worldline outside the light cone connects spacelike-separated events. Different inertial observers disagree on the time-ordering of such events — the root of the tachyonic-antitelephone causality paradox.",
+    "Writing m² = −μ² makes the rest mass itself imaginary. Below the threshold |p| = μ the real energy-momentum relation has no real solution for E — the surface dips into a formally imaginary regime with no real-particle interpretation.",
+    "A charged particle moving faster than light in vacuum radiates spontaneously — its own field can never keep pace, so the wavefronts pile into a Mach-style shock cone of half-angle θ_c. Because tachyon energy goes as E = mc²/√(v²/c²−1), this radiated energy loss pushes E downward and v upward: the particle accelerates toward v→∞ as E→0, the opposite of how ordinary Cherenkov emitters slow toward the medium's wave speed."
+  ];
+
+  // Legend HTML using new CSS classes
+  const legendData = [
+    [['#5ad8e6','E > 0 sheet'], ['#e8a23d','E < 0 sheet'], ['#ffffff','throat |p|=√(−m²)']],
+    [['#5ad8e6','light cone (v=c)'], ['#e8a23d','tachyon worldline (v>c)'], ['#888888','plane of simultaneity']],
+    [['#5ad8e6','real energy region'], ['#9a7fe0','imaginary energy region'], ['#ffffff','threshold |p| = μ']],
+    [['#ffd28a','tachyon (charged)'], ['#5ad8e6','shock cone θ_c'], ['#e8a23d','emitted photons']]
+  ];
+
+  function renderLegend(idx){
+    const el = document.getElementById('legend');
+    let html = '<div class="legend-title">Legend</div>';
+    legendData[idx].forEach(([color, label]) => {
+      html += `<div class="legend-item"><div class="l-swatch" style="background:${color}"></div>${label}</div>`;
+    });
+    el.innerHTML = html;
+  }
+  renderLegend(0);
+
+  function setMode(idx){
+    currentMode = idx;
+    modeGroups.forEach((g,i)=> g.visible = (i===idx));
+    document.querySelectorAll('.mode-btn').forEach((b,i)=> b.classList.toggle('active', i===idx));
+    document.getElementById('subtitle').innerHTML = subtitles[idx];
+    document.getElementById('eq-main').textContent = eqMain[idx];
+    document.getElementById('eq-desc').innerHTML = eqDesc[idx];
+    renderLegend(idx);
+    const scrubEl = document.getElementById('scrub');
+    const scrubWrap = document.getElementById('scrub-wrap');
+    if(idx===1){
+      scrubWrap.style.display='flex';
+      document.getElementById('scrub-label').textContent = "v / c — worldline slope";
+      scrubEl.min=1.05; scrubEl.max=3; scrubEl.step=0.05; scrubEl.value=1.6; updateWorldlineSlope(1.6); document.getElementById('scrub-val').textContent='1.60';
+    } else if(idx===3){
+      scrubWrap.style.display='flex';
+      document.getElementById('scrub-label').textContent = "v / c — shock cone angle";
+      scrubEl.min=1.05; scrubEl.max=4; scrubEl.step=0.05; scrubEl.value=cherenkovState.v;
+      document.getElementById('scrub-val').textContent = cherenkovState.v.toFixed(2);
+      buildCherenkov();
+    } else {
+      scrubWrap.style.display='flex';
+      document.getElementById('scrub-label').textContent = "m² — tachyonic mass²";
+      scrubEl.min=-3; scrubEl.max=-0.1; scrubEl.step=0.05; scrubEl.value=m2; document.getElementById('scrub-val').textContent = m2.toFixed(2);
+    }
+  }
+
+  document.querySelectorAll('.mode-btn').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      setMode(parseInt(btn.dataset.mode,10));
+      targetTheta = 0.78;
+    });
+  });
+
+  function updateWorldlineSlope(v){
+    const coneHeight=6, coneRadius=6, steps=80;
+    const pts=[];
+    for(let i=-steps;i<=steps;i++){
+      const t = i/steps*coneHeight*0.95;
+      const radial = Math.abs(v*t*(coneRadius/coneHeight)*0.62);
+      const ang = t*0.9;
+      pts.push(new THREE.Vector3(radial*Math.cos(ang), t, radial*Math.sin(ang)));
+    }
+    lightConeGroup.userData.path = pts;
+    const worldline = lightConeGroup.children.find(c=>c.type==='Line' && c.material.color.getHex()===0xe8a23d);
+    if(worldline){ worldline.geometry.setFromPoints(pts); }
+    document.getElementById('r-v').textContent = v.toFixed(2)+'c';
+  }
+
+  const scrubEl = document.getElementById('scrub');
+  scrubEl.addEventListener('input', ()=>{
+    const val = parseFloat(scrubEl.value);
+    document.getElementById('scrub-val').textContent = val.toFixed(2);
+    if(currentMode===1){
+      updateWorldlineSlope(val);
+    } else if(currentMode===3){
+      cherenkovState.v = val;
+      buildCherenkov();
+      document.getElementById('r-v').textContent = val.toFixed(2)+'c';
+    } else {
+      m2 = val;
+      document.getElementById('r-mass').textContent = m2.toFixed(2);
+      buildHyperboloid();
+      buildImaginaryShell();
+    }
+  });
+  document.getElementById('r-mass').textContent = m2.toFixed(2);
+
+  // ---------- resize ----------
+  window.addEventListener('resize', ()=>{
+    camera.aspect = window.innerWidth/window.innerHeight;
+    camera.updateProjectionMatrix();
+    renderer.setPixelRatio(getPixelRatio());
+    renderer.setSize(window.innerWidth, window.innerHeight);
+  });
+
+  // ---------- animation loop ----------
+  let frameCount=0, lastFpsTime=performance.now(), worldlineT=0, cherenkovT=0;
+  function animate(){
+    requestAnimationFrame(animate);
+    if(autoRotate) targetTheta += 0.0009;
+    updateCamera();
+
+    const t = performance.now()*0.001;
+    [modeGroups[0], modeGroups[2]].forEach(g=>{
+      g.traverse(o=>{ if(o.geometry && o.geometry.type==='TorusGeometry'){ o.material.opacity = 0.4+0.3*Math.sin(t*2); } });
+    });
+
+    if(currentMode===1){
+      const path = lightConeGroup.userData.path;
+      worldlineT += 0.006;
+      if(worldlineT>1) worldlineT=0;
+      const idx = Math.floor(worldlineT*(path.length-1));
+      const p = path[idx];
+      if(p){
+        lightConeGroup.userData.marker.position.copy(p);
+        lightConeGroup.userData.glow.position.copy(p);
+      }
+    }
+
+    if(currentMode===3 && cherenkovGroup3){
+      const trackLen = 13;
+      const speedFactor = 0.004 * cherenkovState.v;
+      cherenkovT += speedFactor;
+      if(cherenkovT>1) cherenkovT=0;
+      const headZ = -trackLen/2 + cherenkovT*trackLen;
+      const head = cherenkovGroup3.userData.head;
+      const headGlow = cherenkovGroup3.userData.headGlow;
+      if(head){ head.position.z = headZ; }
+      if(headGlow){ headGlow.position.z = headZ; }
+      const cone = cherenkovGroup3.userData.cone;
+      const wire = cherenkovGroup3.userData.wire;
+      if(cone){ cone.position.z = headZ; }
+      if(wire){ wire.position.z = headZ; }
+
+      const cosTheta = Math.min(0.97, 1/cherenkovState.v);
+      const theta = Math.acos(cosTheta);
+      cherenkovPhotons.forEach(ph=>{
+        ph.born += 0.0035 + 0.002*cherenkovState.v;
+        if(ph.born>1) ph.born -= 1;
+        const dz = ph.born*trackLen*0.85;
+        const r = dz*Math.tan(theta);
+        const x = r*Math.cos(ph.ang);
+        const y = r*Math.sin(ph.ang);
+        ph.mesh.position.set(x, y, headZ - dz);
+        ph.mesh.material.opacity = 1;
+        const fade = 1 - ph.born;
+        ph.mesh.scale.setScalar(0.6 + 0.8*fade);
+      });
+    }
+
+    renderer.render(scene, camera);
+
+    frameCount++;
+    const now = performance.now();
+    if(now - lastFpsTime > 500){
+      document.getElementById('r-fps').textContent = Math.round(frameCount/((now-lastFpsTime)/1000));
+      frameCount=0; lastFpsTime=now;
+    }
+    if(currentMode===1){
+      document.getElementById('r-e').textContent = '—';
+    } else if(currentMode===3){
+      const eVal = 1/Math.sqrt(cherenkovState.v*cherenkovState.v - 1);
+      document.getElementById('r-e').textContent = eVal.toFixed(2)+' (falling)';
+      document.getElementById('r-v').textContent = cherenkovState.v.toFixed(2)+'c';
+    } else {
+      document.getElementById('r-e').textContent = (Math.sqrt(-m2)).toFixed(2)+' (throat)';
+    }
+  }
+
+  setTimeout(()=>{ loading.style.opacity='0'; loading.style.transition='opacity 0.6s'; setTimeout(()=>loading.style.display='none', 600); }, 350);
+  animate();
+})();
+</script>
+</body>
+</html>
